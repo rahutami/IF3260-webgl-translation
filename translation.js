@@ -1,88 +1,20 @@
-const vertexShaderSource = `
-attribute vec2 a_position;
-
-uniform vec2 u_resolution;
-
-void main() {
-    vec2 zeroToOne = a_position / u_resolution;
-
-    vec2 zeroToTwo = zeroToOne * 2.0;
-
-    vec2 clipSpace = zeroToTwo - 1.0;
-
-    gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-}
-`;
-
-const fragmentShaderSource = `
-precision mediump float;
-
-uniform vec4 u_color;
-
-void main() {
-    gl_FragColor = u_color;
-}
-`;
-
-("use strict");
-
-function createShader(gl, type, source) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-
-  if (success) {
-    return shader;
-  }
-
-  console.log(gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-}
-
-function createProgram(gl, vertexShader, fragmentShader) {
-  const program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-
-  const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-
-  if (success) {
-    return program;
-  }
-
-  console.log(gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-}
-
-function resizeCanvasToDisplaySize(canvas, multiplier) {
-  multiplier = multiplier || 1;
-  const width = (canvas.clientWidth * multiplier) | 0;
-  const height = (canvas.clientHeight * multiplier) | 0;
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-    return true;
-  }
-  return false;
-}
+"use strict";
 
 function main() {
+  // Get A WebGL context
+  /** @type {HTMLCanvasElement} */
   var canvas = document.querySelector("#canvas");
   var gl = canvas.getContext("webgl");
   if (!gl) {
     return;
   }
 
-  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  const fragmentShader = createShader(
-    gl,
-    gl.FRAGMENT_SHADER,
-    fragmentShaderSource
-  );
-
-  const program = createProgram(gl, vertexShader, fragmentShader);
+  // setup GLSL program
+  var program = webglUtils.createProgramFromScripts(gl, [
+    "vertex-shader-2d",
+    "fragment-shader-2d",
+  ]);
+  gl.useProgram(program);
 
   // look up where the vertex data needs to go.
   var positionLocation = gl.getAttribLocation(program, "a_position");
@@ -90,16 +22,16 @@ function main() {
   // lookup uniforms
   var resolutionLocation = gl.getUniformLocation(program, "u_resolution");
   var colorLocation = gl.getUniformLocation(program, "u_color");
+  var translationLocation = gl.getUniformLocation(program, "u_translation");
 
   // Create a buffer to put positions in
   var positionBuffer = gl.createBuffer();
-
   // Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  // Put geometry data into buffer
+  setGeometry(gl);
 
   var translation = [0, 0];
-  var width = 100;
-  var height = 30;
   var color = [Math.random(), Math.random(), Math.random(), 1];
 
   drawScene();
@@ -121,9 +53,9 @@ function main() {
     };
   }
 
-  // Draw a the scene.
+  // Draw the scene.
   function drawScene() {
-    resizeCanvasToDisplaySize(gl.canvas);
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 
     // Tell WebGL how to convert from clip space to pixels
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -139,9 +71,6 @@ function main() {
 
     // Bind the position buffer.
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-    // Setup a rectangle
-    setRectangle(gl, translation[0], translation[1], width, height);
 
     // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
     var size = 2; // 2 components per iteration
@@ -164,23 +93,31 @@ function main() {
     // set the color
     gl.uniform4fv(colorLocation, color);
 
-    // Draw the rectangle.
+    // Set the translation.
+    gl.uniform2fv(translationLocation, translation);
+
+    // Draw the geometry.
     var primitiveType = gl.TRIANGLES;
     var offset = 0;
-    var count = 6;
+    var count = 18; // 6 triangles in the 'F', 3 points per triangle
     gl.drawArrays(primitiveType, offset, count);
   }
 }
 
-// Fill the buffer with the values that define a rectangle.
-function setRectangle(gl, x, y, width, height) {
-  var x1 = x;
-  var x2 = x + width;
-  var y1 = y;
-  var y2 = y + height;
+// Fill the buffer with the values that define a letter 'F'.
+function setGeometry(gl) {
   gl.bufferData(
     gl.ARRAY_BUFFER,
-    new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]),
+    new Float32Array([
+      // left column
+      0, 0, 30, 0, 0, 150, 0, 150, 30, 0, 30, 150,
+
+      // top rung
+      30, 0, 100, 0, 30, 30, 30, 30, 100, 0, 100, 30,
+
+      // middle rung
+      30, 60, 67, 60, 30, 90, 30, 90, 67, 60, 67, 90,
+    ]),
     gl.STATIC_DRAW
   );
 }
